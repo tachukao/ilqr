@@ -1,16 +1,6 @@
 open Owl
 module AD = Algodiff.D
 
-let linsearch ?(alpha = 1.) ?(alpha_min = 1e-8) ?(tau = 0.5) f0 f =
-  let rec backtrack alpha =
-    let fv, prms = f alpha in
-    if f0 < fv
-    then if alpha < alpha_min then None else backtrack (tau *. alpha)
-    else Some prms
-  in
-  backtrack (tau *. alpha)
-
-
 module Fl = struct
   type s =
     { q : AD.t
@@ -69,39 +59,39 @@ module Make (P : P) = struct
     (* xf, xs, us are in reverse *)
     let xf, xs, us = forward x0 us in
     let _, _, acc =
-      let sf, vf =
+      let vxx, vx =
         match final_loss with
         | Some fl -> fl.q, AD.Maths.((xf - fl.x) *@ fl.q)
         | None    -> AD.Mat.zeros n n, AD.Mat.zeros 1 n
       in
       List.fold_left2
-        (fun (s, v, acc) x u ->
+        (fun (vxx, vx, acc) x u ->
           let a = jac_x ~x ~u in
           let b = jac_u ~x ~u in
-          let z = add_option AD.Maths.(b *@ s *@ transpose b) running_loss.r in
-          let kv = AD.(Maths.transpose (Linalg.linsolve z b)) in
+          let quu = add_option AD.Maths.(b *@ vxx *@ transpose b) running_loss.r in
+          let kv = AD.(Maths.transpose (Linalg.linsolve quu b)) in
           let ku =
             match running_loss.r with
-            | Some r -> AD.(Maths.(transpose (Linalg.linsolve z r)))
+            | Some r -> AD.(Maths.(transpose (Linalg.linsolve quu r)))
             | None   -> AD.Mat.zeros 1 m
           in
-          let _K = AD.Maths.(a *@ s *@ kv) in
-          let _k = AD.Maths.((v *@ kv) + (u *@ ku)) in
+          let _K = AD.Maths.(a *@ vxx *@ kv) in
+          let _k = AD.Maths.((vx *@ kv) + (u *@ ku)) in
           let acl = AD.Maths.(a - (_K *@ b)) in
-          let s = add_option AD.Maths.(acl *@ s *@ transpose a) running_loss.q in
-          let v =
+          let vxx = add_option AD.Maths.(acl *@ vxx *@ transpose a) running_loss.q in
+          let vx =
             let v =
               match running_loss.r with
-              | Some r -> AD.Maths.((v *@ transpose acl) - (u *@ r *@ transpose _K))
-              | None   -> AD.Maths.(v *@ transpose acl)
+              | Some r -> AD.Maths.((vx *@ transpose acl) - (u *@ r *@ transpose _K))
+              | None   -> AD.Maths.(vx *@ transpose acl)
             in
             match running_loss.q with
             | Some q -> AD.Maths.(v + (x *@ q))
             | None   -> v
           in
           let acc = (x, u, (_K, _k)) :: acc in
-          s, v, acc)
-        (sf, vf, [])
+          vxx, vx, acc)
+        (vxx, vx, [])
         xs
         us
     in
@@ -165,7 +155,7 @@ module Make (P : P) = struct
           let fv = loss x0 us in
           fv, us
         in
-        match linsearch f0 f with
+        match Linesearch.backtrack f0 f with
         | Some us -> loop (succ iter) us
         | None    -> failwith "linesearch did not converge ")
     in

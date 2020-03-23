@@ -1,14 +1,6 @@
 open Owl
 module AD = Algodiff.D
 
-val linsearch
-  :  ?alpha:float
-  -> ?alpha_min:float
-  -> ?tau:float
-  -> 'a
-  -> (float -> 'a * 'b)
-  -> 'b option
-
 (* module final loss *)
 module Fl : sig
   type t

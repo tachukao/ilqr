@@ -1,6 +1,7 @@
 open Owl
 module AD = Algodiff.D
 
+let () = Printexc.record_backtrace true
 let dir = Cmdargs.(get_string "-d" |> force ~usage:"-d [dir]")
 let in_dir = Printf.sprintf "%s/%s" dir
 
@@ -21,15 +22,20 @@ module P = struct
     AD.Maths.(x + (dx * dt))
 
 
-  let running_loss = Ilqr.Classic.Rl.create ~r:(Owl.Mat.(eye m *$ 1E-5) |> AD.pack_arr) ()
+  let running_loss =
+    let r = Owl.Mat.(eye m *$ 1E-5) |> AD.pack_arr in
+    fun ~x:_x ~u -> AD.(Maths.(F 0.5 * sum' (u *@ r * u)))
+
 
   let final_loss =
     let q = Owl.Mat.(eye n *$ 5.) |> AD.pack_arr in
-    let x = [| [| 0.; 0. |] |] |> Mat.of_arrays |> AD.pack_arr in
-    Ilqr.Classic.Fl.create ~qx:(q, x) ()
+    let xstar = [| [| 0.; 0. |] |] |> Mat.of_arrays |> AD.pack_arr in
+    fun ~x ->
+      let dx = AD.Maths.(xstar - x) in
+      AD.(Maths.(F 0.5 * sum' (dx *@ q * dx)))
 end
 
-module M = Ilqr.Classic.Make (P)
+module M = Ilqr.Default.Make (P)
 
 let () =
   let x0 = [| [| Const.pi; 0. |] |] |> Mat.of_arrays |> AD.pack_arr in

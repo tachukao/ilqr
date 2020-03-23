@@ -1,3 +1,3 @@
 (executables
-    (names pendulum)
+    (names pendulum pendulum2)
     (libraries ilqr owl cmdargs))
