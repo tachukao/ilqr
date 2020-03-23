@@ -15,8 +15,13 @@ end
 module Make (P : P) = struct
   include P
 
-  let jac_u ~x ~u = AD.jacobian (fun u -> dyn ~x ~u) u |> AD.Maths.transpose
-  let jac_x ~x ~u = AD.jacobian (fun x -> dyn ~x ~u) x |> AD.Maths.transpose
+  let dyn_u ~x ~u = AD.jacobian (fun u -> dyn ~x ~u) u |> AD.Maths.transpose
+  let dyn_x ~x ~u = AD.jacobian (fun x -> dyn ~x ~u) x |> AD.Maths.transpose
+  let l_u ~x ~u = AD.grad (fun u -> running_loss ~x ~u) u
+  let l_x ~x ~u = AD.grad (fun x -> running_loss ~x ~u) x
+  let l_uu ~x ~u = AD.jacobian (fun u -> l_u ~x ~u) u |> AD.Maths.transpose
+  let l_xx ~x ~u = AD.jacobian (fun x -> l_x ~x ~u) x |> AD.Maths.transpose
+  let l_ux ~x ~u = AD.jacobian (fun x -> l_u ~x ~u) x
 
   let forward x0 us =
     List.fold_left
@@ -39,15 +44,13 @@ module Make (P : P) = struct
       in
       List.fold_left2
         (fun (vxx, vx, acc) x u ->
-          let a = jac_x ~x ~u in
-          let b = jac_u ~x ~u in
-          let lu ~x ~u = AD.grad (fun u -> running_loss ~x ~u) u in
-          let lx ~x ~u = AD.grad (fun x -> running_loss ~x ~u) x in
-          let luu = AD.jacobian (fun u -> lu ~x ~u) u |> AD.Maths.transpose in
-          let lxx = AD.jacobian (fun x -> lx ~x ~u) x |> AD.Maths.transpose in
-          let lux = AD.jacobian (fun x -> lu ~x ~u) x in
-          let lx = lx ~x ~u |> AD.primal in
-          let lu = lu ~x ~u |> AD.primal in
+          let a = dyn_x ~x ~u in
+          let b = dyn_u ~x ~u in
+          let lx = l_x ~x ~u
+          and lu = l_u ~x ~u
+          and lxx = l_xx ~x ~u
+          and luu = l_uu ~x ~u
+          and lux = l_ux ~x ~u in
           let qx = AD.Maths.(lx + (vx *@ transpose a)) in
           let qu = AD.Maths.(lu + (vx *@ transpose b)) in
           let qxx = AD.Maths.(lxx + (a *@ vxx *@ transpose a)) in

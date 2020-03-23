@@ -35,8 +35,8 @@ end
 module Make (P : P) = struct
   include P
 
-  let jac_u ~x ~u = AD.jacobian (fun u -> dyn ~x ~u) u |> AD.Maths.transpose
-  let jac_x ~x ~u = AD.jacobian (fun x -> dyn ~x ~u) x |> AD.Maths.transpose
+  let dyn_u ~x ~u = AD.jacobian (fun u -> dyn ~x ~u) u |> AD.Maths.transpose
+  let dyn_x ~x ~u = AD.jacobian (fun x -> dyn ~x ~u) x |> AD.Maths.transpose
 
   let forward x0 us =
     List.fold_left
@@ -66,8 +66,8 @@ module Make (P : P) = struct
       in
       List.fold_left2
         (fun (vxx, vx, acc) x u ->
-          let a = jac_x ~x ~u in
-          let b = jac_u ~x ~u in
+          let a = dyn_x ~x ~u in
+          let b = dyn_u ~x ~u in
           let quu = add_option AD.Maths.(b *@ vxx *@ transpose b) running_loss.r in
           let kv = AD.(Maths.transpose (Linalg.linsolve quu b)) in
           let ku =
