@@ -1,3 +1,5 @@
+open Owl
+module AD = Algodiff.D
 
 (* module final loss *)
 module Fl : sig
