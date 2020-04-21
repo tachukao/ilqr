@@ -59,9 +59,13 @@ module Make (P : P) = struct
           let quu = AD.Maths.(luu + (b *@ vxx *@ bt)) in
           let qux = AD.Maths.(lux + (b *@ vxx *@ at)) in
           let _K = AD.Linalg.(linsolve quu qux) |> AD.Maths.transpose |> AD.Maths.neg in
-          let _k = AD.Linalg.(linsolve quu qu) |> AD.Maths.transpose |> AD.Maths.neg in
+          let _k =
+            AD.Linalg.(linsolve quu (AD.Maths.transpose qu))
+            |> AD.Maths.transpose
+            |> AD.Maths.neg
+          in
           let vxx = AD.Maths.(qxx + transpose (_K *@ qux)) in
-          let vx = AD.Maths.(qx + transpose (_K *@ qu)) in
+          let vx = AD.Maths.(qx + (qu *@ transpose _K)) in
           let acc = (x, u, (_K, _k)) :: acc in
           vxx, vx, acc)
         (vxx, vx, [])
