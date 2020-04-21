@@ -1,0 +1,15 @@
+opam-version: "2.0"
+authors: [ "Ta-Chu Calvin Kao" ]
+license: "MIT"
+homepage: "https://github.com/tachukao/ilqr"
+dev-repo: "git+https://github.com/tachukao/ilqr.git"
+bug-reports: "https://github.com/tachukao/ilqr/issues"
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+]
+depends: [
+  "ocaml" {>= "4.06.0"}
+  "dune" {>= "2.0.0"}
+  "owl" {>= "0.7.0"}
+]
+synopsis: "iLQR"

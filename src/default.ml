@@ -45,21 +45,23 @@ module Make (P : P) = struct
       List.fold_left2
         (fun (vxx, vx, acc) x u ->
           let a = dyn_x ~x ~u in
+          let at = AD.Maths.transpose a in
           let b = dyn_u ~x ~u in
+          let bt = AD.Maths.transpose b in
           let lx = l_x ~x ~u
           and lu = l_u ~x ~u
           and lxx = l_xx ~x ~u
           and luu = l_uu ~x ~u
           and lux = l_ux ~x ~u in
-          let qx = AD.Maths.(lx + (vx *@ transpose a)) in
-          let qu = AD.Maths.(lu + (vx *@ transpose b)) in
-          let qxx = AD.Maths.(lxx + (a *@ vxx *@ transpose a)) in
-          let quu = AD.Maths.(luu + (b *@ vxx *@ transpose b)) in
-          let qux = AD.Maths.(lux + (b *@ vxx *@ transpose a)) in
+          let qx = AD.Maths.(lx + (vx *@ at)) in
+          let qu = AD.Maths.(lu + (vx *@ bt)) in
+          let qxx = AD.Maths.(lxx + (a *@ vxx *@ at)) in
+          let quu = AD.Maths.(luu + (b *@ vxx *@ bt)) in
+          let qux = AD.Maths.(lux + (b *@ vxx *@ at)) in
           let _K = AD.Linalg.(linsolve quu qux) |> AD.Maths.transpose |> AD.Maths.neg in
           let _k = AD.Linalg.(linsolve quu qu) |> AD.Maths.transpose |> AD.Maths.neg in
-          let vxx = AD.Maths.(qxx - (_K *@ quu *@ transpose _K)) in
-          let vx = AD.Maths.(qx - (_k *@ quu *@ transpose _K)) in
+          let vxx = AD.Maths.(qxx + transpose (_K *@ qux)) in
+          let vx = AD.Maths.(qx + transpose (_K *@ qu)) in
           let acc = (x, u, (_K, _k)) :: acc in
           vxx, vx, acc)
         (vxx, vx, [])

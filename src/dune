@@ -1,3 +1,4 @@
 (library
  (name ilqr)
+ (public_name ilqr)
  (libraries owl))
