@@ -1,8 +1,6 @@
 open Owl
 module AD = Algodiff.D
 
-let () = Printexc.record_backtrace true
-
 let dir = Cmdargs.(get_string "-d" |> force ~usage:"-d [dir]")
 let in_dir = Printf.sprintf "%s/%s" dir
 
