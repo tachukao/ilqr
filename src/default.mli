@@ -1,13 +1,13 @@
 open Owl
 module AD = Algodiff.D
 
-type final_loss = x:AD.t -> AD.t
-type running_loss = x:AD.t -> u:AD.t -> AD.t
+type final_loss = k:int -> x:AD.t -> AD.t
+type running_loss = k:int -> x:AD.t -> u:AD.t -> AD.t
 
 module type P = sig
   val n : int
   val m : int
-  val dyn : u:AD.t -> x:AD.t -> AD.t
+  val dyn : k:int -> u:AD.t -> x:AD.t -> AD.t
   val final_loss : final_loss
   val running_loss : running_loss
 end
