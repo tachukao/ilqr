@@ -103,8 +103,8 @@ module Make (P : P) = struct
     let fl = final_loss ~k:kf ~x:xf in
     let _, rl =
       List.fold_left2
-        (fun (k, rl) x u -> succ k, AD.Maths.(rl + running_loss ~k ~x ~u))
-        (0, AD.F 0.)
+        (fun (k, rl) x u -> pred k, AD.Maths.(rl + running_loss ~k ~x ~u))
+        (kf - 1, AD.F 0.)
         xs
         us
     in

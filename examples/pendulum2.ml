@@ -23,8 +23,16 @@ module P = struct
 
 
   let running_loss =
+    let q = Owl.Mat.(eye n *$ 5.) |> AD.pack_arr in
+    let xstar = [| [| 0.; 0. |] |] |> Mat.of_arrays |> AD.pack_arr in
     let r = Owl.Mat.(eye m *$ 1E-5) |> AD.pack_arr in
-    fun ~k:_k ~x:_x ~u -> AD.(Maths.(F 0.5 * sum' (u *@ r * u)))
+    fun ~k:k ~x:x ~u -> 
+      let t  = AD.F (float k *. 1E-3) in
+      let dx = AD.Maths.(xstar - x) in
+      let input = AD.(Maths.(F 0.5 * sum' (u *@ r * u))) in
+      let gain = AD.Maths.(F 1. - exp (neg t / F 3.))  in
+      let state = AD.(Maths.(gain * sum' (dx *@ q * dx))) in
+      AD.Maths.(input + state)
 
 
   let final_loss =
