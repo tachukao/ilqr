@@ -1,6 +1,8 @@
 open Owl
 module AD = Algodiff.D
 
+let () = Printexc.record_backtrace true
+
 type final_loss = k:int -> x:AD.t -> AD.t
 type running_loss = k:int -> x:AD.t -> u:AD.t -> AD.t
 
@@ -33,66 +35,81 @@ module Make (P : P) = struct
       (0, x0, [], [])
       us
 
-
-  let update x0 us =
-    (* xf, xs, us are in reverse *)
-    let kf, xf, xs, us = forward x0 us in
-    let acc, dv1, dv2 =
-      let k, _, _, dv1, dv2, acc =
-        let vxx, vx =
-          let g x = AD.grad (fun x -> final_loss ~k:kf ~x) x in
-          AD.jacobian g xf |> AD.Maths.transpose, g xf
+  let update =
+      fun x0 us ->
+      (* xf, xs, us are in reverse *)
+      let kf, xf, xsf, usf = forward x0 us in
+      let acc, df1, df2 =
+        let k, _, _, df1, df2, acc =
+          let vxxf, vxf =
+            let g x = AD.grad (fun x -> final_loss ~k:kf ~x) x in
+            AD.jacobian g xf |> AD.Maths.transpose, g xf
+          in
+          let rec backward (delta, mu) (k, vxx, vx, dv1, dv2, acc) xs us =
+            match xs, us with
+            | x :: xtl, u :: utl ->
+              let a = dyn_x ~k ~x ~u in
+              let at = AD.Maths.transpose a in
+              let b = dyn_u ~k ~x ~u in
+              let bt = AD.Maths.transpose b in
+              let lx = l_x ~k ~x ~u
+              and lu = l_u ~k ~x ~u
+              and lxx = l_xx ~k ~x ~u
+              and luu = l_uu ~k ~x ~u
+              and lux = l_ux ~k ~x ~u in
+              let qx = AD.Maths.(lx + (vx *@ at)) in
+              let qu = AD.Maths.(lu + (vx *@ bt)) in
+              let qxx = AD.Maths.(lxx + (a *@ vxx *@ at)) in
+              let quu = AD.Maths.(luu + (b *@ vxx *@ bt)) in
+              let qtuu = AD.Maths.(quu + (b *@ (AD.F mu * AD.Mat.(eye n)) *@ bt)) in
+              if not (Owl.Linalg.D.is_posdef (AD.unpack_arr quu))
+              then (
+                Printf.printf "NOT POSDEF\n%!";
+                backward
+                  (Regularization.increase delta mu)
+                  (kf - 1, vxxf, vxf, AD.F 0., AD.F 0., [])
+                  xsf
+                  usf)
+              else (
+                let qux = AD.Maths.(lux + (b *@ vxx *@ at)) in
+                let qtux = AD.Maths.(qux + (b *@ (AD.F mu * AD.Mat.(eye n)) *@ at)) in
+                let _K =
+                  AD.Linalg.(linsolve qtuu qtux) |> AD.Maths.transpose |> AD.Maths.neg
+                in
+                let _k =
+                  AD.Linalg.(linsolve qtuu (AD.Maths.transpose qu))
+                  |> AD.Maths.transpose
+                  |> AD.Maths.neg
+                in
+                let vxx = AD.Maths.(qxx + transpose (_K *@ qux)) in
+                let vx = AD.Maths.(qx + (qu *@ transpose _K)) in
+                let acc = (x, u, (_K, _k)) :: acc in
+                let dv1 = AD.Maths.(dv1 + sum' (_k *@ quu *@ transpose _k)) in
+                let dv2 = AD.Maths.(dv2 + sum' (_k *@ transpose quu)) in
+                backward (Regularization.decrease delta mu) (k - 1, vxx, vx, dv1, dv2, acc) xtl utl)
+            | [], []             -> k, vxx, vx, dv1, dv2, acc
+            | _                  -> failwith "xs and us not the same length"
+          in
+          backward (1., 0.) (kf - 1, vxxf, vxf, AD.F 0., AD.F 0., []) xsf usf
         in
-        List.fold_left2
-          (fun (k, vxx, vx, dv1, dv2, acc) x u ->
-            let a = dyn_x ~k ~x ~u in
-            let at = AD.Maths.transpose a in
-            let b = dyn_u ~k ~x ~u in
-            let bt = AD.Maths.transpose b in
-            let lx = l_x ~k ~x ~u
-            and lu = l_u ~k ~x ~u
-            and lxx = l_xx ~k ~x ~u
-            and luu = l_uu ~k ~x ~u
-            and lux = l_ux ~k ~x ~u in
-            let qx = AD.Maths.(lx + (vx *@ at)) in
-            let qu = AD.Maths.(lu + (vx *@ bt)) in
-            let qxx = AD.Maths.(lxx + (a *@ vxx *@ at)) in
-            let quu = AD.Maths.(luu + (b *@ vxx *@ bt)) in
-            let qux = AD.Maths.(lux + (b *@ vxx *@ at)) in
-            let _K = AD.Linalg.(linsolve quu qux) |> AD.Maths.transpose |> AD.Maths.neg in
-            let _k =
-              AD.Linalg.(linsolve quu (AD.Maths.transpose qu))
-              |> AD.Maths.transpose
-              |> AD.Maths.neg
-            in
-            let vxx = AD.Maths.(qxx + transpose (_K *@ qux)) in
-            let vx = AD.Maths.(qx + (qu *@ transpose _K)) in
-            let acc = (x, u, (_K, _k)) :: acc in
-            let dv1 = AD.Maths.(dv1 + sum' (_k *@ quu *@ transpose _k)) in
-            let dv2 = AD.Maths.(dv2 + sum' (_k *@ transpose quu)) in
-            k - 1, vxx, vx, dv1, dv2, acc)
-          (kf - 1, vxx, vx, AD.F 0., AD.F 0., [])
-          xs
-          us
+        assert (k = -1);
+        acc, AD.unpack_flt df1, AD.unpack_flt df2
       in
-      assert (k = -1);
-      acc, AD.unpack_flt dv1, AD.unpack_flt dv2
-    in
-    fun alpha ->
-      let _, _, uhats =
-        List.fold_left
-          (fun (k, xhat, uhats) (x, u, (_K, _k)) ->
-            let dx = AD.Maths.(xhat - x) in
-            let du = AD.Maths.((dx *@ _K) + (AD.F alpha * _k)) in
-            let uhat = AD.Maths.(u + du) in
-            let uhats = uhat :: uhats in
-            let xhat = dyn ~k ~x:xhat ~u:uhat in
-            succ k, xhat, uhats)
-          (0, x0, [])
-          acc
-      in
-      let dv = (alpha *. dv1) +. (0.5 *. alpha *. alpha *. dv2) in
-      List.rev uhats, dv
+      fun alpha ->
+        let _, _, uhats =
+          List.fold_left
+            (fun (k, xhat, uhats) (x, u, (_K, _k)) ->
+              let dx = AD.Maths.(xhat - x) in
+              let du = AD.Maths.((dx *@ _K) + (AD.F alpha * _k)) in
+              let uhat = AD.Maths.(u + du) in
+              let uhats = uhat :: uhats in
+              let xhat = dyn ~k ~x:xhat ~u:uhat in
+              succ k, xhat, uhats)
+            (0, x0, [])
+            acc
+        in
+        let df = (alpha *. df1) +. (0.5 *. alpha *. alpha *. df2) in
+        List.rev uhats, df
 
 
   let trajectory x0 us =
