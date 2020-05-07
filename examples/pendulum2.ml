@@ -25,18 +25,16 @@ module P = struct
   let running_loss =
     let q = Owl.Mat.(eye n *$ 5.) |> AD.pack_arr in
     let xstar = [| [| 0.; 0. |] |] |> Mat.of_arrays |> AD.pack_arr in
-    let r = Owl.Mat.(eye m *$ 1E-5) |> AD.pack_arr in
-    fun ~k:k ~x:x ~u -> 
-      let t  = AD.F (float k *. 1E-3) in
+    let r = Owl.Mat.(eye m *$ 1E-20) |> AD.pack_arr in
+    fun ~k:_k ~x:x ~u -> 
       let dx = AD.Maths.(xstar - x) in
       let input = AD.(Maths.(F 0.5 * sum' (u *@ r * u))) in
-      let gain = AD.Maths.(F 1. - exp (neg t / F 3.))  in
-      let state = AD.(Maths.(gain * sum' (dx *@ q * dx))) in
+      let state = AD.(Maths.(F 0.5 * sum' (dx *@ q * dx))) in
       AD.Maths.(input + state)
 
 
   let final_loss =
-    let q = Owl.Mat.(eye n *$ 5.) |> AD.pack_arr in
+    let q = Owl.Mat.(eye n *$ 0.) |> AD.pack_arr in
     let xstar = [| [| 0.; 0. |] |] |> Mat.of_arrays |> AD.pack_arr in
     fun ~k:_k ~x ->
       let dx = AD.Maths.(xstar - x) in
@@ -56,7 +54,7 @@ let () =
       let pct_change = abs_float (c -. !cprev) /. !cprev in
       if k mod 1 = 0
       then (
-        Printf.printf "iter %i | cost %.6f | pct change %f\n%!" k c pct_change;
+        Printf.printf "iter %2i | cost %.6f | pct change %.10f\n%!" k c pct_change;
         cprev := c;
         M.trajectory x0 us |> AD.unpack_arr |> Mat.save_txt ~out:(in_dir "traj1");
         us
@@ -64,6 +62,6 @@ let () =
         |> AD.Maths.concatenate ~axis:0
         |> AD.unpack_arr
         |> Mat.save_txt ~out:(in_dir "us"));
-      pct_change < 1E-3
+      pct_change < 1E-10
   in
   M.learn ~stop x0 us |> ignore

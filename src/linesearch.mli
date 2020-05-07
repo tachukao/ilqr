@@ -2,6 +2,7 @@ val backtrack
   :  ?alpha:float
   -> ?alpha_min:float
   -> ?tau:float
-  -> 'a
-  -> (float -> 'a * 'b)
-  -> 'b option
+  -> ?beta:float
+  -> float
+  -> (float -> float * float option * 'a )
+  -> 'a option

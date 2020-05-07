@@ -37,14 +37,14 @@ module Make (P : P) = struct
   let update x0 us =
     (* xf, xs, us are in reverse *)
     let kf, xf, xs, us = forward x0 us in
-    let acc =
-      let k, _, _, acc =
+    let acc, dv1, dv2 =
+      let k, _, _, dv1, dv2, acc =
         let vxx, vx =
           let g x = AD.grad (fun x -> final_loss ~k:kf ~x) x in
           AD.jacobian g xf |> AD.Maths.transpose, g xf
         in
         List.fold_left2
-          (fun (k, vxx, vx, acc) x u ->
+          (fun (k, vxx, vx, dv1, dv2, acc) x u ->
             let a = dyn_x ~k ~x ~u in
             let at = AD.Maths.transpose a in
             let b = dyn_u ~k ~x ~u in
@@ -68,13 +68,15 @@ module Make (P : P) = struct
             let vxx = AD.Maths.(qxx + transpose (_K *@ qux)) in
             let vx = AD.Maths.(qx + (qu *@ transpose _K)) in
             let acc = (x, u, (_K, _k)) :: acc in
-            k - 1, vxx, vx, acc)
-          (kf - 1, vxx, vx, [])
+            let dv1 = AD.Maths.(dv1 + sum' (_k *@ quu *@ transpose _k)) in
+            let dv2 = AD.Maths.(dv2 + sum' (_k *@ transpose quu)) in
+            k - 1, vxx, vx, dv1, dv2, acc)
+          (kf - 1, vxx, vx, AD.F 0., AD.F 0., [])
           xs
           us
       in
       assert (k = -1);
-      acc
+      acc, AD.unpack_flt dv1, AD.unpack_flt dv2
     in
     fun alpha ->
       let _, _, uhats =
@@ -89,7 +91,8 @@ module Make (P : P) = struct
           (0, x0, [])
           acc
       in
-      List.rev uhats
+      let dv = (alpha *. dv1) +. (0.5 *. alpha *. alpha *. dv2) in
+      List.rev uhats, dv
 
 
   let trajectory x0 us =
@@ -119,9 +122,9 @@ module Make (P : P) = struct
         let f0 = loss x0 us in
         let update = update x0 us in
         let f alpha =
-          let us = update alpha in
+          let us, df = update alpha in
           let fv = loss x0 us in
-          fv, us
+          fv, Some df, us
         in
         match Linesearch.backtrack f0 f with
         | Some us -> loop (succ iter) us

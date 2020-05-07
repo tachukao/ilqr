@@ -153,7 +153,7 @@ module Make (P : P) = struct
         let f alpha =
           let us = update alpha in
           let fv = loss x0 us in
-          fv, us
+          fv, None, us
         in
         match Linesearch.backtrack f0 f with
         | Some us -> loop (succ iter) us
