@@ -43,7 +43,7 @@ module Make (P : P) = struct
           let g x = AD.grad (fun x -> final_loss ~k:kf ~x) x in
           AD.jacobian g xf |> AD.Maths.transpose, g xf
         in
-        let rec backward (delta, mu) (k, vxx, vx, dv1, dv2, acc) xs us =
+        let rec backward (delta, mu) (k, vxx, vx, df1, df2, acc) xs us =
           match xs, us with
           | x :: xtl, u :: utl ->
             let a = dyn_x ~k ~x ~u in
@@ -82,14 +82,14 @@ module Make (P : P) = struct
               let vxx = AD.Maths.(qxx + transpose (_K *@ qux)) in
               let vx = AD.Maths.(qx + (qu *@ transpose _K)) in
               let acc = (x, u, (_K, _k)) :: acc in
-              let dv1 = AD.Maths.(dv1 + sum' (_k *@ quu *@ transpose _k)) in
-              let dv2 = AD.Maths.(dv2 + sum' (_k *@ transpose quu)) in
+              let df1 = AD.Maths.(df1 + sum' (_k *@ quu *@ transpose _k)) in
+              let df2 = AD.Maths.(df2 + sum' (_k *@ transpose quu)) in
               backward
                 (Regularisation.decrease (delta, mu))
-                (k - 1, vxx, vx, dv1, dv2, acc)
+                (k - 1, vxx, vx, df1, df2, acc)
                 xtl
                 utl)
-          | [], []             -> k, vxx, vx, dv1, dv2, acc
+          | [], []             -> k, vxx, vx, df1, df2, acc
           | _                  -> failwith "xs and us not the same length"
         in
         backward (1., 0.) (kf - 1, vxxf, vxf, AD.F 0., AD.F 0., []) xsf usf
