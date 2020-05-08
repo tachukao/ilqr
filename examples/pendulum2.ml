@@ -12,7 +12,7 @@ module P = struct
   let g = AD.F 9.8
   let mu = AD.F 0.01
 
-  let dyn ~k:_k ~u ~x =
+  let dyn ~k:_k ~x ~u =
     let x1 = AD.Maths.get_slice [ []; [ 0 ] ] x in
     let x2 = AD.Maths.get_slice [ []; [ 1 ] ] x in
     let b = AD.pack_arr (Mat.of_arrays [| [| 1.; 0. |] |] |> Mat.transpose) in

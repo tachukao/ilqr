@@ -1,27 +1,52 @@
 open Owl
 module AD = Algodiff.D
 
+type dyn = k:int -> x:AD.t -> u:AD.t -> AD.t
 type final_loss = k:int -> x:AD.t -> AD.t
 type running_loss = k:int -> x:AD.t -> u:AD.t -> AD.t
+
+let forward_for_backward ~dyn ~running_loss ~final_loss () =
+  let dyn_u ~k ~x ~u = AD.jacobian (fun u -> dyn ~k ~x ~u) u |> AD.Maths.transpose in
+  let dyn_x ~k ~x ~u = AD.jacobian (fun x -> dyn ~k ~x ~u) x |> AD.Maths.transpose in
+  let l_u ~k ~x ~u = AD.grad (fun u -> running_loss ~k ~x ~u) u in
+  let l_x ~k ~x ~u = AD.grad (fun x -> running_loss ~k ~x ~u) x in
+  let l_uu ~k ~x ~u = AD.jacobian (fun u -> l_u ~k ~x ~u) u |> AD.Maths.transpose in
+  let l_xx ~k ~x ~u = AD.jacobian (fun x -> l_x ~k ~x ~u) x |> AD.Maths.transpose in
+  let l_ux ~k ~x ~u = AD.jacobian (fun x -> l_u ~k ~x ~u) x in
+  fun x0 us ->
+    let kf, xf, tape =
+      List.fold_left
+        (fun (k, x, tape) u ->
+          let a = dyn_x ~k ~x ~u
+          and b = dyn_u ~k ~x ~u
+          and lx = l_x ~k ~x ~u
+          and lu = l_u ~k ~x ~u
+          and lxx = l_xx ~k ~x ~u
+          and luu = l_uu ~k ~x ~u
+          and lux = l_ux ~k ~x ~u in
+          let s = Lqr.{ x; u; a; b; lx; lu; lxx; luu; lux } in
+          let x = dyn ~k ~x ~u in
+          succ k, x, s :: tape)
+        (0, x0, [])
+        us
+    in
+    let vxxf, vxf =
+      let g x = AD.grad (fun x -> final_loss ~k:kf ~x) x in
+      AD.jacobian g xf |> AD.Maths.transpose, g xf
+    in
+    vxxf, vxf, tape
+
 
 module type P = sig
   val n : int
   val m : int
-  val dyn : k:int -> u:AD.t -> x:AD.t -> AD.t
+  val dyn : dyn
   val final_loss : final_loss
   val running_loss : running_loss
 end
 
 module Make (P : P) = struct
   include P
-
-  let dyn_u ~k ~x ~u = AD.jacobian (fun u -> dyn ~k ~x ~u) u |> AD.Maths.transpose
-  let dyn_x ~k ~x ~u = AD.jacobian (fun x -> dyn ~k ~x ~u) x |> AD.Maths.transpose
-  let l_u ~k ~x ~u = AD.grad (fun u -> running_loss ~k ~x ~u) u
-  let l_x ~k ~x ~u = AD.grad (fun x -> running_loss ~k ~x ~u) x
-  let l_uu ~k ~x ~u = AD.jacobian (fun u -> l_u ~k ~x ~u) u |> AD.Maths.transpose
-  let l_xx ~k ~x ~u = AD.jacobian (fun x -> l_x ~k ~x ~u) x |> AD.Maths.transpose
-  let l_ux ~k ~x ~u = AD.jacobian (fun x -> l_u ~k ~x ~u) x
 
   let forward x0 us =
     List.fold_left
@@ -34,48 +59,27 @@ module Make (P : P) = struct
       us
 
 
-  let forward_for_backward x0 us =
-    List.fold_left
-      (fun (k, x, tape) u ->
-        let a = dyn_x ~k ~x ~u
-        and b = dyn_u ~k ~x ~u
-        and lx = l_x ~k ~x ~u
-        and lu = l_u ~k ~x ~u
-        and lxx = l_xx ~k ~x ~u
-        and luu = l_uu ~k ~x ~u
-        and lux = l_ux ~k ~x ~u in
-        let s = Lqr.{ x; u; a; b; lx; lu; lxx; luu; lux } in
-        let x = dyn ~k ~x ~u in
-        succ k, x, s :: tape)
-      (0, x0, [])
-      us
-
-
-  let update x0 us =
-    (* xf, xs, us are in reverse *)
-    let kf, xf, tape = forward_for_backward x0 us in
-    let acc, (df1, df2) =
-      let vxxf, vxf =
-        let g x = AD.grad (fun x -> final_loss ~k:kf ~x) x in
-        AD.jacobian g xf |> AD.Maths.transpose, g xf
-      in
-      Lqr.backward vxxf vxf tape
-    in
-    fun alpha ->
-      let _, _, uhats =
-        List.fold_left
-          (fun (k, xhat, uhats) (x, u, (_K, _k)) ->
-            let dx = AD.Maths.(xhat - x) in
-            let du = AD.Maths.((dx *@ _K) + (AD.F alpha * _k)) in
-            let uhat = AD.Maths.(u + du) in
-            let uhats = uhat :: uhats in
-            let xhat = dyn ~k ~x:xhat ~u:uhat in
-            succ k, xhat, uhats)
-          (0, x0, [])
-          acc
-      in
-      let df = (alpha *. df1) +. (0.5 *. alpha *. alpha *. df2) in
-      List.rev uhats, df
+  let update =
+    let forward_for_backward = forward_for_backward ~dyn ~running_loss ~final_loss () in
+    fun x0 us ->
+      (* xf, xs, us are in reverse *)
+      let vxxf, vxf, tape = forward_for_backward x0 us in
+      let acc, (df1, df2) = Lqr.backward vxxf vxf tape in
+      fun alpha ->
+        let _, _, uhats =
+          List.fold_left
+            (fun (k, xhat, uhats) (x, u, (_K, _k)) ->
+              let dx = AD.Maths.(xhat - x) in
+              let du = AD.Maths.((dx *@ _K) + (AD.F alpha * _k)) in
+              let uhat = AD.Maths.(u + du) in
+              let uhats = uhat :: uhats in
+              let xhat = dyn ~k ~x:xhat ~u:uhat in
+              succ k, xhat, uhats)
+            (0, x0, [])
+            acc
+        in
+        let df = (alpha *. df1) +. (0.5 *. alpha *. alpha *. df2) in
+        List.rev uhats, df
 
 
   let trajectory x0 us =
