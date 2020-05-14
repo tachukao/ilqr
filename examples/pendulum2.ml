@@ -22,11 +22,19 @@ module P = struct
     AD.Maths.(x + (dx * dt))
 
 
+  let dyn_x = None
+  let dyn_u = None
+  let l_xx = None
+  let l_ux = None
+  let l_uu = None
+  let l_u = None
+  let l_x = None
+
   let running_loss =
     let q = Owl.Mat.(eye n *$ 5.) |> AD.pack_arr in
     let xstar = [| [| 0.; 0. |] |] |> Mat.of_arrays |> AD.pack_arr in
     let r = Owl.Mat.(eye m *$ 1E-20) |> AD.pack_arr in
-    fun ~k:_k ~x:x ~u -> 
+    fun ~k:_k ~x ~u ->
       let dx = AD.Maths.(xstar - x) in
       let input = AD.(Maths.(F 0.5 * sum' (u *@ r * u))) in
       let state = AD.(Maths.(F 0.5 * sum' (dx *@ q * dx))) in

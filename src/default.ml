@@ -1,18 +1,51 @@
 open Owl
 module AD = Algodiff.D
 
-type dyn = k:int -> x:AD.t -> u:AD.t -> AD.t
+type t = k:int -> x:AD.t -> u:AD.t -> AD.t
 type final_loss = k:int -> x:AD.t -> AD.t
 type running_loss = k:int -> x:AD.t -> u:AD.t -> AD.t
 
-let forward_for_backward ~dyn ~running_loss ~final_loss () =
-  let dyn_u ~k ~x ~u = AD.jacobian (fun u -> dyn ~k ~x ~u) u |> AD.Maths.transpose in
-  let dyn_x ~k ~x ~u = AD.jacobian (fun x -> dyn ~k ~x ~u) x |> AD.Maths.transpose in
-  let l_u ~k ~x ~u = AD.grad (fun u -> running_loss ~k ~x ~u) u in
-  let l_x ~k ~x ~u = AD.grad (fun x -> running_loss ~k ~x ~u) x in
-  let l_uu ~k ~x ~u = AD.jacobian (fun u -> l_u ~k ~x ~u) u |> AD.Maths.transpose in
-  let l_xx ~k ~x ~u = AD.jacobian (fun x -> l_x ~k ~x ~u) x |> AD.Maths.transpose in
-  let l_ux ~k ~x ~u = AD.jacobian (fun x -> l_u ~k ~x ~u) x in
+let forward_for_backward
+    ?dyn_x
+    ?dyn_u
+    ?l_uu
+    ?l_xx
+    ?l_ux
+    ?l_u
+    ?l_x
+    ~dyn
+    ~running_loss
+    ~final_loss
+    ()
+  =
+  let dyn_u =
+    let default ~k ~x ~u = AD.jacobian (fun u -> dyn ~k ~x ~u) u |> AD.Maths.transpose in
+    Option.value dyn_u ~default
+  in
+  let dyn_x =
+    let default ~k ~x ~u = AD.jacobian (fun x -> dyn ~k ~x ~u) x |> AD.Maths.transpose in
+    Option.value dyn_x ~default
+  in
+  let l_u =
+    let default ~k ~x ~u = AD.grad (fun u -> running_loss ~k ~x ~u) u in
+    Option.value l_u ~default
+  in
+  let l_x =
+    let default ~k ~x ~u = AD.grad (fun x -> running_loss ~k ~x ~u) x in
+    Option.value l_x ~default
+  in
+  let l_uu =
+    let default ~k ~x ~u = AD.jacobian (fun u -> l_u ~k ~x ~u) u |> AD.Maths.transpose in
+    Option.value l_uu ~default
+  in
+  let l_xx =
+    let default ~k ~x ~u = AD.jacobian (fun x -> l_x ~k ~x ~u) x |> AD.Maths.transpose in
+    Option.value l_xx ~default
+  in
+  let l_ux =
+    let default ~k ~x ~u = AD.jacobian (fun x -> l_u ~k ~x ~u) x in
+    Option.value l_ux ~default
+  in
   fun x0 us ->
     let kf, xf, tape =
       List.fold_left
@@ -40,9 +73,16 @@ let forward_for_backward ~dyn ~running_loss ~final_loss () =
 module type P = sig
   val n : int
   val m : int
-  val dyn : dyn
+  val dyn : t
   val final_loss : final_loss
   val running_loss : running_loss
+  val dyn_x : t option
+  val dyn_u : t option
+  val l_uu : t option
+  val l_xx : t option
+  val l_ux : t option
+  val l_u : t option
+  val l_x : t option
 end
 
 module Make (P : P) = struct
@@ -60,7 +100,20 @@ module Make (P : P) = struct
 
 
   let update =
-    let forward_for_backward = forward_for_backward ~dyn ~running_loss ~final_loss () in
+    let forward_for_backward =
+      forward_for_backward
+        ?dyn_x
+        ?dyn_u
+        ?l_uu
+        ?l_xx
+        ?l_ux
+        ?l_u
+        ?l_x
+        ~dyn
+        ~running_loss
+        ~final_loss
+        ()
+    in
     fun x0 us ->
       (* xf, xs, us are in reverse *)
       let vxxf, vxf, tape = forward_for_backward x0 us in
