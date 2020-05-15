@@ -9,11 +9,13 @@ type running_loss = k:int -> x:AD.t -> u:AD.t -> AD.t
 val forward_for_backward
   :  ?dyn_x:t
   -> ?dyn_u:t
-  -> ?l_uu:t
-  -> ?l_xx:t
-  -> ?l_ux:t
-  -> ?l_u:t
-  -> ?l_x:t
+  -> ?rl_uu:t
+  -> ?rl_xx:t
+  -> ?rl_ux:t
+  -> ?rl_u:t
+  -> ?rl_x:t
+  -> ?fl_xx:s
+  -> ?fl_x:s
   -> dyn:t
   -> running_loss:running_loss
   -> final_loss:final_loss
@@ -30,13 +32,13 @@ module type P = sig
   val running_loss : running_loss
   val dyn_x : t option
   val dyn_u : t option
-  val l_uu : t option
-  val l_xx : t option
-  val l_ux : t option
-  val l_u : t option
-  val l_x : t option
-  val v_xx : s option
-  val v_x : s option
+  val rl_uu : t option
+  val rl_xx : t option
+  val rl_ux : t option
+  val rl_u : t option
+  val rl_x : t option
+  val fl_xx : s option
+  val fl_x : s option
 end
 
 module Make (P : P) : sig

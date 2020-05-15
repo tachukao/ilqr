@@ -9,13 +9,13 @@ type running_loss = k:int -> x:AD.t -> u:AD.t -> AD.t
 let forward_for_backward
     ?dyn_x
     ?dyn_u
-    ?l_uu
-    ?l_xx
-    ?l_ux
-    ?l_u
-    ?l_x
-    ?v_xx
-    ?v_x
+    ?rl_uu
+    ?rl_xx
+    ?rl_ux
+    ?rl_u
+    ?rl_x
+    ?fl_xx
+    ?fl_x
     ~dyn
     ~running_loss
     ~final_loss
@@ -29,33 +29,33 @@ let forward_for_backward
     let default ~k ~x ~u = AD.jacobian (fun x -> dyn ~k ~x ~u) x |> AD.Maths.transpose in
     Option.value dyn_x ~default
   in
-  let l_u =
+  let rl_u =
     let default ~k ~x ~u = AD.grad (fun u -> running_loss ~k ~x ~u) u in
-    Option.value l_u ~default
+    Option.value rl_u ~default
   in
-  let l_x =
+  let rl_x =
     let default ~k ~x ~u = AD.grad (fun x -> running_loss ~k ~x ~u) x in
-    Option.value l_x ~default
+    Option.value rl_x ~default
   in
-  let l_uu =
-    let default ~k ~x ~u = AD.jacobian (fun u -> l_u ~k ~x ~u) u |> AD.Maths.transpose in
-    Option.value l_uu ~default
+  let rl_uu =
+    let default ~k ~x ~u = AD.jacobian (fun u -> rl_u ~k ~x ~u) u |> AD.Maths.transpose in
+    Option.value rl_uu ~default
   in
-  let l_xx =
-    let default ~k ~x ~u = AD.jacobian (fun x -> l_x ~k ~x ~u) x |> AD.Maths.transpose in
-    Option.value l_xx ~default
+  let rl_xx =
+    let default ~k ~x ~u = AD.jacobian (fun x -> rl_x ~k ~x ~u) x |> AD.Maths.transpose in
+    Option.value rl_xx ~default
   in
-  let l_ux =
-    let default ~k ~x ~u = AD.jacobian (fun x -> l_u ~k ~x ~u) x in
-    Option.value l_ux ~default
+  let rl_ux =
+    let default ~k ~x ~u = AD.jacobian (fun x -> rl_u ~k ~x ~u) x in
+    Option.value rl_ux ~default
   in
-  let v_x =
+  let fl_x =
     let default ~k ~x = AD.grad (fun x -> final_loss ~k ~x) x in
-    Option.value v_x ~default
+    Option.value fl_x ~default
   in
-  let v_xx =
-    let default ~k ~x = AD.jacobian (fun x -> v_x ~k ~x) x |> AD.Maths.transpose in
-    Option.value v_xx ~default
+  let fl_xx =
+    let default ~k ~x = AD.jacobian (fun x -> fl_x ~k ~x) x |> AD.Maths.transpose in
+    Option.value fl_xx ~default
   in
   fun x0 us ->
     let kf, xf, tape =
@@ -63,20 +63,20 @@ let forward_for_backward
         (fun (k, x, tape) u ->
           let a = dyn_x ~k ~x ~u
           and b = dyn_u ~k ~x ~u
-          and lx = l_x ~k ~x ~u
-          and lu = l_u ~k ~x ~u
-          and lxx = l_xx ~k ~x ~u
-          and luu = l_uu ~k ~x ~u
-          and lux = l_ux ~k ~x ~u in
-          let s = Lqr.{ x; u; a; b; lx; lu; lxx; luu; lux } in
+          and rlx = rl_x ~k ~x ~u
+          and rlu = rl_u ~k ~x ~u
+          and rlxx = rl_xx ~k ~x ~u
+          and rluu = rl_uu ~k ~x ~u
+          and rlux = rl_ux ~k ~x ~u in
+          let s = Lqr.{ x; u; a; b; rlx; rlu; rlxx; rluu; rlux } in
           let x = dyn ~k ~x ~u in
           succ k, x, s :: tape)
         (0, x0, [])
         us
     in
-    let vxxf = v_xx ~x:xf ~k:kf in
-    let vxf = v_x ~x:xf ~k:kf in
-    vxxf, vxf, tape
+    let flxx = fl_xx ~x:xf ~k:kf in
+    let flx = fl_x ~x:xf ~k:kf in
+    flxx, flx, tape
 
 
 module type P = sig
@@ -87,11 +87,13 @@ module type P = sig
   val running_loss : running_loss
   val dyn_x : t option
   val dyn_u : t option
-  val l_uu : t option
-  val l_xx : t option
-  val l_ux : t option
-  val l_u : t option
-  val l_x : t option
+  val rl_uu : t option
+  val rl_xx : t option
+  val rl_ux : t option
+  val rl_u : t option
+  val rl_x : t option
+  val fl_xx : s option
+  val fl_x : s option
 end
 
 module Make (P : P) = struct
@@ -113,11 +115,11 @@ module Make (P : P) = struct
       forward_for_backward
         ?dyn_x
         ?dyn_u
-        ?l_uu
-        ?l_xx
-        ?l_ux
-        ?l_u
-        ?l_x
+        ?rl_uu
+        ?rl_xx
+        ?rl_ux
+        ?rl_u
+        ?rl_x
         ~dyn
         ~running_loss
         ~final_loss

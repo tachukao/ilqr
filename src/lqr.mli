@@ -6,11 +6,11 @@ type t =
   ; u : AD.t
   ; a : AD.t
   ; b : AD.t
-  ; lx : AD.t
-  ; lu : AD.t
-  ; lxx : AD.t
-  ; luu : AD.t
-  ; lux : AD.t
+  ; rlx : AD.t
+  ; rlu : AD.t
+  ; rlxx : AD.t
+  ; rluu : AD.t
+  ; rlux : AD.t
   }
 
 val backward

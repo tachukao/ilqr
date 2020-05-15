@@ -24,11 +24,13 @@ module P = struct
 
   let dyn_x = None
   let dyn_u = None
-  let l_xx = None
-  let l_ux = None
-  let l_uu = None
-  let l_u = None
-  let l_x = None
+  let rl_xx = None
+  let rl_ux = None
+  let rl_uu = None
+  let rl_u = None
+  let rl_x = None
+  let fl_xx = None
+  let fl_x = None
 
   let running_loss =
     let q = Owl.Mat.(eye n *$ 5.) |> AD.pack_arr in
