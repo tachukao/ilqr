@@ -2,6 +2,7 @@ open Owl
 module AD = Algodiff.D
 
 type t = k:int -> x:AD.t -> u:AD.t -> AD.t
+type s = k:int -> x:AD.t -> AD.t
 type final_loss = k:int -> x:AD.t -> AD.t
 type running_loss = k:int -> x:AD.t -> u:AD.t -> AD.t
 
@@ -34,6 +35,8 @@ module type P = sig
   val l_ux : t option
   val l_u : t option
   val l_x : t option
+  val v_xx : s option
+  val v_x : s option
 end
 
 module Make (P : P) : sig

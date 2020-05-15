@@ -2,6 +2,7 @@ open Owl
 module AD = Algodiff.D
 
 type t = k:int -> x:AD.t -> u:AD.t -> AD.t
+type s = k:int -> x:AD.t -> AD.t
 type final_loss = k:int -> x:AD.t -> AD.t
 type running_loss = k:int -> x:AD.t -> u:AD.t -> AD.t
 
@@ -13,6 +14,8 @@ let forward_for_backward
     ?l_ux
     ?l_u
     ?l_x
+    ?v_xx
+    ?v_x
     ~dyn
     ~running_loss
     ~final_loss
@@ -46,6 +49,14 @@ let forward_for_backward
     let default ~k ~x ~u = AD.jacobian (fun x -> l_u ~k ~x ~u) x in
     Option.value l_ux ~default
   in
+  let v_x =
+    let default ~k ~x = AD.grad (fun x -> final_loss ~k ~x) x in
+    Option.value v_x ~default
+  in
+  let v_xx =
+    let default ~k ~x = AD.jacobian (fun x -> v_x ~k ~x) x |> AD.Maths.transpose in
+    Option.value v_xx ~default
+  in
   fun x0 us ->
     let kf, xf, tape =
       List.fold_left
@@ -63,10 +74,8 @@ let forward_for_backward
         (0, x0, [])
         us
     in
-    let vxxf, vxf =
-      let g x = AD.grad (fun x -> final_loss ~k:kf ~x) x in
-      AD.jacobian g xf |> AD.Maths.transpose, g xf
-    in
+    let vxxf = v_xx ~x:xf ~k:kf in
+    let vxf = v_x ~x:xf ~k:kf in
     vxxf, vxf, tape
 
 
