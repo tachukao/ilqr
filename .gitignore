@@ -268,11 +268,11 @@ _build/
 setup.data
 setup.log
 
-# Merlin configuring file for Vim and Emacs
+# merlin configuring file for vim and emacs
 .merlin
 
-# Dune generated files
+# dune generated files
 *.install
 
-# Local OPAM switch
+# local opam switch
 _opam/
