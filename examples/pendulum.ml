@@ -1,3 +1,4 @@
+let () = Printexc.record_backtrace true
 open Owl
 module AD = Algodiff.D
 

@@ -35,8 +35,8 @@ end
 module Make (P : P) = struct
   include P
 
-  let dyn_u ~x ~u = AD.jacobian (fun u -> dyn ~x ~u) u |> AD.Maths.transpose
-  let dyn_x ~x ~u = AD.jacobian (fun x -> dyn ~x ~u) x |> AD.Maths.transpose
+  let dyn_u ~x ~u = AD.jacobian (fun u -> dyn ~x ~u) u 
+  let dyn_x ~x ~u = AD.jacobian (fun x -> dyn ~x ~u) x 
 
   let forward x0 us =
     List.fold_left

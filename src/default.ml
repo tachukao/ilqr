@@ -22,11 +22,11 @@ let forward_for_backward
     ()
   =
   let dyn_u =
-    let default ~k ~x ~u = AD.jacobian (fun u -> dyn ~k ~x ~u) u |> AD.Maths.transpose in
+    let default ~k ~x ~u = AD.jacobian (fun u -> dyn ~k ~x ~u) u in
     Option.value dyn_u ~default
   in
   let dyn_x =
-    let default ~k ~x ~u = AD.jacobian (fun x -> dyn ~k ~x ~u) x |> AD.Maths.transpose in
+    let default ~k ~x ~u = AD.jacobian (fun x -> dyn ~k ~x ~u) x in
     Option.value dyn_x ~default
   in
   let rl_u =
@@ -38,15 +38,15 @@ let forward_for_backward
     Option.value rl_x ~default
   in
   let rl_uu =
-    let default ~k ~x ~u = AD.jacobian (fun u -> rl_u ~k ~x ~u) u |> AD.Maths.transpose in
+    let default ~k ~x ~u = AD.jacobian (fun u -> rl_u ~k ~x ~u) u in
     Option.value rl_uu ~default
   in
   let rl_xx =
-    let default ~k ~x ~u = AD.jacobian (fun x -> rl_x ~k ~x ~u) x |> AD.Maths.transpose in
+    let default ~k ~x ~u = AD.jacobian (fun x -> rl_x ~k ~x ~u) x in
     Option.value rl_xx ~default
   in
   let rl_ux =
-    let default ~k ~x ~u = AD.jacobian (fun x -> rl_u ~k ~x ~u) x in
+    let default ~k ~x ~u = AD.jacobian (fun u -> rl_x ~k ~x ~u) u in
     Option.value rl_ux ~default
   in
   let fl_x =
@@ -54,7 +54,7 @@ let forward_for_backward
     Option.value fl_x ~default
   in
   let fl_xx =
-    let default ~k ~x = AD.jacobian (fun x -> fl_x ~k ~x) x |> AD.Maths.transpose in
+    let default ~k ~x = AD.jacobian (fun x -> fl_x ~k ~x) x in
     Option.value fl_xx ~default
   in
   fun x0 us ->
